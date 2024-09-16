@@ -6,8 +6,8 @@ import {
   index,
   pgTableCreator,
   serial,
+  text,
   timestamp,
-  varchar,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -18,19 +18,42 @@ import {
  */
 export const createTable = pgTableCreator((name) => `chronoplan_${name}`);
 
-export const posts = createTable(
-  "post",
+export const staff = createTable(
+  "staff",
   {
     id: serial("id").primaryKey(),
-    name: varchar("name", { length: 256 }),
+    name: text("name").notNull(),
+    services: text("name")
+      .array()
+      .default(sql`ARRAY[]::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
-      () => new Date()
+      () => new Date(),
     ),
   },
   (example) => ({
-    nameIndex: index("name_idx").on(example.name),
-  })
+    nameIndex: index("staff_name_idx").on(example.name),
+  }),
+);
+
+export const clients = createTable(
+  "clients",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    services: text("name")
+      .array()
+      .default(sql`ARRAY[]::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
+      () => new Date(),
+    ),
+  },
+  (example) => ({
+    nameIndex: index("clients_name_idx").on(example.name),
+  }),
 );
