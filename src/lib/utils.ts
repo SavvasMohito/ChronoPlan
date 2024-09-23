@@ -47,10 +47,7 @@ function formatTime(slot: number): string {
 
 function formatDay(dayNum: number): string {
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    if (dayNum < 0 || dayNum >= days.length) {
-        return "";
-    }
-    return  days[dayNum]; // or handle the out-of-range case in a way that makes sense for your application
+    return days[dayNum];
 }
 
 function findAppointments(teachers: Teacher[], students: Student[], timeSlots: TimeSlot[], maxClassrooms: number): [string, string, string, string, string][] {

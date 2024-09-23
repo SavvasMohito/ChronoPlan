@@ -23,9 +23,7 @@ export const staff = createTable(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    services: text("name")
-      .array()
-      .default(sql`ARRAY[]::text[]`),
+    services: text("services").array().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -43,9 +41,7 @@ export const clients = createTable(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    services: text("name")
-      .array()
-      .default(sql`ARRAY[]::text[]`),
+    services: text("services").array().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),

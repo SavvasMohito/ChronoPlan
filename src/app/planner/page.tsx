@@ -15,12 +15,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { api } from "@/trpc/react";
 
 type Person = {
   id: string;
   name: string;
-  role: "teacher" | "student";
-  subjects: string[];
+  role: "staff" | "client";
+  services: string[];
   availability: { [day: string]: number[] };
 };
 
@@ -32,8 +33,8 @@ export default function UnifiedDashboard() {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [newPerson, setNewPerson] = useState<Omit<Person, "id">>({
     name: "",
-    role: "student",
-    subjects: [],
+    role: "client",
+    services: [],
     availability: {},
   });
   const [visiblePeople, setVisiblePeople] = useState<Set<string>>(new Set());
@@ -42,8 +43,41 @@ export default function UnifiedDashboard() {
   const lastInteractedCell = useRef<string | null>(null);
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
+  const insertStaff = api.staff.create.useMutation({
+    onSuccess: (data) => {
+      console.log("success");
+      console.log(data);
+    },
+    onError: (error) => {
+      console.log("error");
+      console.log(error);
+    },
+  });
+  const insertClient = api.clients.create.useMutation({
+    onSuccess: (data) => {
+      console.log("success");
+      console.log(data);
+    },
+    onError: (error) => {
+      console.log("error");
+      console.log(error);
+    },
+  });
 
-  const addPerson = () => {
+  const addPerson = async () => {
+    if (!newPerson.name || newPerson.services.length == 0) return;
+    if (newPerson.role === "staff") {
+      insertStaff.mutate({
+        name: newPerson.name,
+        services: newPerson.services,
+      });
+    } else {
+      insertStaff.mutate({
+        name: newPerson.name,
+        services: newPerson.services,
+      });
+    }
+
     const person: Person = {
       ...newPerson,
       id: Date.now().toString(),
@@ -53,8 +87,8 @@ export default function UnifiedDashboard() {
     setVisiblePeople(new Set(visiblePeople).add(person.id));
     setNewPerson({
       name: "",
-      role: "student",
-      subjects: [],
+      role: "client",
+      services: [],
       availability: {},
     });
   };
@@ -160,29 +194,29 @@ export default function UnifiedDashboard() {
                     <Label>Role</Label>
                     <RadioGroup
                       value={newPerson.role}
-                      onValueChange={(value: "teacher" | "student") =>
+                      onValueChange={(value: "staff" | "client") =>
                         setNewPerson({ ...newPerson, role: value })
                       }
                     >
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="student" id="new-student" />
-                        <Label htmlFor="new-student">Student</Label>
+                        <RadioGroupItem value="client" id="new-client" />
+                        <Label htmlFor="new-client">Client</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="teacher" id="new-teacher" />
-                        <Label htmlFor="new-teacher">Teacher</Label>
+                        <RadioGroupItem value="staff" id="new-staff" />
+                        <Label htmlFor="new-staff">Staff</Label>
                       </div>
                     </RadioGroup>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="subjects">Subjects (comma-separated)</Label>
+                    <Label htmlFor="services">Services (comma-separated)</Label>
                     <Input
-                      id="subjects"
-                      value={newPerson.subjects.join(", ")}
+                      id="services"
+                      value={newPerson.services.join(", ")}
                       onChange={(e) =>
                         setNewPerson({
                           ...newPerson,
-                          subjects: e.target.value
+                          services: e.target.value
                             .split(",")
                             .map((s) => s.trim()),
                         })
@@ -222,7 +256,7 @@ export default function UnifiedDashboard() {
                       {selectedPerson.name}'s Details
                     </h3>
                     <p>Role: {selectedPerson.role}</p>
-                    <p>Subjects: {selectedPerson.subjects.join(", ")}</p>
+                    <p>Services: {selectedPerson.services.join(", ")}</p>
 
                     <h3 className="mb-2 mt-4 text-lg font-semibold">
                       Availability
