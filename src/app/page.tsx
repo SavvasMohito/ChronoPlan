@@ -72,7 +72,7 @@ export default function UnifiedDashboard() {
         services: newPerson.services,
       });
     } else {
-      insertStaff.mutate({
+      insertClient.mutate({
         name: newPerson.name,
         services: newPerson.services,
       });
