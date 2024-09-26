@@ -1,53 +1,394 @@
-import Link from "next/link";
+"use client";
 
-import { LatestPost } from "@/app/_components/post";
-import { api, HydrateClient } from "@/trpc/server";
+import React, { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { api } from "@/trpc/react";
 
-export default async function Home() {
-  const hello = await api.post.hello({ text: "from tRPC" });
+type Person = {
+  id: string;
+  name: string;
+  role: "staff" | "client";
+  services: string[];
+  availability: { [day: string]: number[] };
+};
 
-  void api.post.getLatest.prefetch();
+const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const hours = Array.from({ length: 9 }, (_, i) => i + 13); // 13 (1 PM) to 21 (9 PM)
+
+export default function UnifiedDashboard() {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [newPerson, setNewPerson] = useState<Omit<Person, "id">>({
+    name: "",
+    role: "client",
+    services: [],
+    availability: {},
+  });
+  const [visiblePeople, setVisiblePeople] = useState<Set<string>>(new Set());
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(true);
+  const lastInteractedCell = useRef<string | null>(null);
+
+  const selectedPerson = people.find((p) => p.id === selectedPersonId);
+  const insertStaff = api.staff.create.useMutation({
+    onSuccess: (data) => {
+      console.log("success");
+      console.log(data);
+    },
+    onError: (error) => {
+      console.log("error");
+      console.log(error);
+    },
+  });
+  const insertClient = api.clients.create.useMutation({
+    onSuccess: (data) => {
+      console.log("success");
+      console.log(data);
+    },
+    onError: (error) => {
+      console.log("error");
+      console.log(error);
+    },
+  });
+
+  const addPerson = async () => {
+    if (!newPerson.name || newPerson.services.length == 0) return;
+    if (newPerson.role === "staff") {
+      insertStaff.mutate({
+        name: newPerson.name,
+        services: newPerson.services,
+      });
+    } else {
+      insertStaff.mutate({
+        name: newPerson.name,
+        services: newPerson.services,
+      });
+    }
+
+    const person: Person = {
+      ...newPerson,
+      id: Date.now().toString(),
+    };
+    setPeople([...people, person]);
+    setSelectedPersonId(person.id);
+    setVisiblePeople(new Set(visiblePeople).add(person.id));
+    setNewPerson({
+      name: "",
+      role: "client",
+      services: [],
+      availability: {},
+    });
+  };
+
+  const updatePerson = (updatedPerson: Person) => {
+    setPeople(
+      people.map((p) => (p.id === updatedPerson.id ? updatedPerson : p)),
+    );
+  };
+
+  const handleMouseDown = (day: string, hour: number) => {
+    if (!selectedPerson) return;
+    setIsMouseDown(true);
+    setIsSelecting(!selectedPerson.availability[day]?.includes(hour));
+    toggleAvailability(day, hour);
+    lastInteractedCell.current = `${day}-${hour}`;
+  };
+
+  const handleMouseEnter = (day: string, hour: number) => {
+    if (isMouseDown && `${day}-${hour}` !== lastInteractedCell.current) {
+      if (isSelecting) {
+        if (!selectedPerson?.availability[day]?.includes(hour)) {
+          toggleAvailability(day, hour);
+        }
+      } else {
+        if (selectedPerson?.availability[day]?.includes(hour)) {
+          toggleAvailability(day, hour);
+        }
+      }
+      lastInteractedCell.current = `${day}-${hour}`;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsMouseDown(false);
+  };
+
+  const toggleAvailability = (day: string, hour: number) => {
+    if (!selectedPerson) return;
+
+    const updatedAvailability = { ...selectedPerson.availability };
+    const dayAvailability = updatedAvailability[day] || [];
+
+    if (dayAvailability.includes(hour)) {
+      updatedAvailability[day] = dayAvailability.filter((h) => h !== hour);
+    } else {
+      updatedAvailability[day] = [...dayAvailability, hour].sort(
+        (a, b) => a - b,
+      );
+    }
+
+    updatePerson({ ...selectedPerson, availability: updatedAvailability });
+  };
+
+  const togglePersonVisibility = (personId: string) => {
+    const newVisiblePeople = new Set(visiblePeople);
+    if (newVisiblePeople.has(personId)) {
+      newVisiblePeople.delete(personId);
+    } else {
+      newVisiblePeople.add(personId);
+    }
+    setVisiblePeople(newVisiblePeople);
+  };
 
   return (
-    <HydrateClient>
-      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
-        <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
-          </h1>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/usage/first-steps"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">First Steps →</h3>
-              <div className="text-lg">
-                Just the basics - Everything you need to know to set up your
-                database and authentication.
-              </div>
-            </Link>
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/introduction"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">Documentation →</h3>
-              <div className="text-lg">
-                Learn more about Create T3 App, the libraries it uses, and how
-                to deploy it.
-              </div>
-            </Link>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-2xl text-white">
-              {hello ? hello.greeting : "Loading tRPC query..."}
-            </p>
-          </div>
+    <div className="container mx-auto p-4">
+      <h1 className="mb-4 text-2xl font-bold">
+        Unified Availability Dashboard
+      </h1>
 
-          <LatestPost />
-        </div>
-      </main>
-    </HydrateClient>
+      <Tabs defaultValue="individual">
+        <TabsList className="mb-4">
+          <TabsTrigger value="individual">Individual View</TabsTrigger>
+          <TabsTrigger value="global">Global View</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="individual">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add New Person</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    addPerson();
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      value={newPerson.name}
+                      onChange={(e) =>
+                        setNewPerson({ ...newPerson, name: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <RadioGroup
+                      value={newPerson.role}
+                      onValueChange={(value: "staff" | "client") =>
+                        setNewPerson({ ...newPerson, role: value })
+                      }
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="client" id="new-client" />
+                        <Label htmlFor="new-client">Client</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="staff" id="new-staff" />
+                        <Label htmlFor="new-staff">Staff</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="services">Services (comma-separated)</Label>
+                    <Input
+                      id="services"
+                      value={newPerson.services.join(", ")}
+                      onChange={(e) =>
+                        setNewPerson({
+                          ...newPerson,
+                          services: e.target.value
+                            .split(",")
+                            .map((s) => s.trim()),
+                        })
+                      }
+                      required
+                    />
+                  </div>
+                  <Button type="submit">Add Person</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Edit Person</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  value={selectedPersonId || ""}
+                  onValueChange={setSelectedPersonId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {people.map((person) => (
+                      <SelectItem key={person.id} value={person.id}>
+                        {person.name} ({person.role})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {selectedPerson && (
+                  <div className="mt-4">
+                    <h3 className="mb-2 text-lg font-semibold">
+                      {selectedPerson.name}'s Details
+                    </h3>
+                    <p>Role: {selectedPerson.role}</p>
+                    <p>Services: {selectedPerson.services.join(", ")}</p>
+
+                    <h3 className="mb-2 mt-4 text-lg font-semibold">
+                      Availability
+                    </h3>
+                    <div
+                      className="overflow-x-auto"
+                      onMouseLeave={handleMouseUp}
+                      onMouseUp={handleMouseUp}
+                    >
+                      <table className="min-w-full">
+                        <thead>
+                          <tr>
+                            <th className="px-4 py-2">Hour</th>
+                            {days.map((day) => (
+                              <th key={day} className="px-4 py-2">
+                                {day}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hours.map((hour) => (
+                            <tr key={hour}>
+                              <td className="px-4 py-2">{hour}:00</td>
+                              {days.map((day) => (
+                                <td
+                                  key={`${day}-${hour}`}
+                                  className={`cursor-pointer border px-4 py-2 ${
+                                    (
+                                      selectedPerson.availability[day] || []
+                                    ).includes(hour)
+                                      ? "bg-primary"
+                                      : "bg-background"
+                                  }`}
+                                  onMouseDown={() => handleMouseDown(day, hour)}
+                                  onMouseEnter={() =>
+                                    handleMouseEnter(day, hour)
+                                  }
+                                  role="gridcell"
+                                  aria-selected={(
+                                    selectedPerson.availability[day] || []
+                                  ).includes(hour)}
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      toggleAvailability(day, hour);
+                                    }
+                                  }}
+                                />
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="global">
+          <Card>
+            <CardHeader>
+              <CardTitle>Global Availability View</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <h3 className="mb-2 text-lg font-semibold">
+                  Toggle Visibility
+                </h3>
+                <div className="flex flex-wrap gap-4">
+                  {people.map((person) => (
+                    <div
+                      key={person.id}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`visibility-${person.id}`}
+                        checked={visiblePeople.has(person.id)}
+                        onCheckedChange={() =>
+                          togglePersonVisibility(person.id)
+                        }
+                      />
+                      <Label htmlFor={`visibility-${person.id}`}>
+                        {person.name}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-2">Hour</th>
+                      {days.map((day) => (
+                        <th key={day} className="px-4 py-2">
+                          {day}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hours.map((hour) => (
+                      <tr key={hour}>
+                        <td className="px-4 py-2">{hour}:00</td>
+                        {days.map((day) => (
+                          <td
+                            key={`${day}-${hour}`}
+                            className="border px-4 py-2"
+                          >
+                            {people
+                              .filter(
+                                (person) =>
+                                  visiblePeople.has(person.id) &&
+                                  person.availability[day]?.includes(hour),
+                              )
+                              .map((person) => person.name)
+                              .join(", ")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
