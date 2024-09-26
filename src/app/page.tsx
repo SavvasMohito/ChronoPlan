@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/trpc/react";
+import StaffList from "./_components/PeopleDropdown";
 
 type Person = {
   id: string;
@@ -31,94 +32,70 @@ const hours = Array.from({ length: 9 }, (_, i) => i + 13); // 13 (1 PM) to 21 (9
 export default function UnifiedDashboard() {
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
-  const [newPerson, setNewPerson] = useState<Omit<Person, "id">>({
-    name: "",
-    role: "client",
-    services: [],
-    availability: {},
-  });
+  const [editedPerson, setEditedPerson] = useState<Person | null>(null);
   const [visiblePeople, setVisiblePeople] = useState<Set<string>>(new Set());
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [isSelecting, setIsSelecting] = useState(true);
-  const lastInteractedCell = useRef<string | null>(null);
 
-  const selectedPerson = people.find((p) => p.id === selectedPersonId);
-  const insertStaff = api.staff.create.useMutation({
-    onSuccess: (data) => {
-      console.log("success");
-      console.log(data);
-    },
-    onError: (error) => {
-      console.log("error");
-      console.log(error);
-    },
-  });
-  const insertClient = api.clients.create.useMutation({
-    onSuccess: (data) => {
-      console.log("success");
-      console.log(data);
-    },
-    onError: (error) => {
-      console.log("error");
-      console.log(error);
-    },
-  });
+  const insertStaff = api.staff.create.useMutation();
+  const insertClient = api.clients.create.useMutation();
 
-  const addPerson = async () => {
-    if (!newPerson.name || newPerson.services.length == 0) return;
-    if (newPerson.role === "staff") {
-      insertStaff.mutate({
-        name: newPerson.name,
-        services: newPerson.services,
-      });
+  useEffect(() => {
+    if (selectedPersonId) {
+      const person = people.find((p) => p.id === selectedPersonId);
+      if (person) {
+        setEditedPerson({ ...person });
+      }
     } else {
-      insertClient.mutate({
-        name: newPerson.name,
-        services: newPerson.services,
-      });
+      setEditedPerson(null);
     }
+  }, [selectedPersonId, people]);
 
-    const person: Person = {
-      ...newPerson,
+  const addNewPerson = () => {
+    const newPerson: Person = {
       id: Date.now().toString(),
-    };
-    setPeople([...people, person]);
-    setSelectedPersonId(person.id);
-    setVisiblePeople(new Set(visiblePeople).add(person.id));
-    setNewPerson({
       name: "",
       role: "client",
       services: [],
       availability: {},
-    });
+    };
+    setPeople([...people, newPerson]);
+    setSelectedPersonId(newPerson.id);
+    setEditedPerson(newPerson);
   };
 
-  const updatePerson = (updatedPerson: Person) => {
-    setPeople(
-      people.map((p) => (p.id === updatedPerson.id ? updatedPerson : p)),
-    );
+  const savePerson = async () => {
+    if (!editedPerson) return;
+
+    const updateMutation =
+      editedPerson.role === "staff" ? insertStaff : insertClient;
+    await updateMutation.mutateAsync({
+      name: editedPerson.name,
+      services: editedPerson.services,
+      // availability: editedPerson.availability,
+    });
+
+    setPeople(people.map((p) => (p.id === editedPerson.id ? editedPerson : p)));
   };
 
   const handleMouseDown = (day: string, hour: number) => {
-    if (!selectedPerson) return;
+    if (!editedPerson) return;
     setIsMouseDown(true);
-    setIsSelecting(!selectedPerson.availability[day]?.includes(hour));
+    setIsSelecting(!editedPerson.availability[day]?.includes(hour));
     toggleAvailability(day, hour);
-    lastInteractedCell.current = `${day}-${hour}`;
   };
 
   const handleMouseEnter = (day: string, hour: number) => {
-    if (isMouseDown && `${day}-${hour}` !== lastInteractedCell.current) {
+    if (isMouseDown) {
       if (isSelecting) {
-        if (!selectedPerson?.availability[day]?.includes(hour)) {
+        if (!editedPerson?.availability[day]?.includes(hour)) {
           toggleAvailability(day, hour);
         }
       } else {
-        if (selectedPerson?.availability[day]?.includes(hour)) {
+        if (editedPerson?.availability[day]?.includes(hour)) {
           toggleAvailability(day, hour);
         }
       }
-      lastInteractedCell.current = `${day}-${hour}`;
     }
   };
 
@@ -127,9 +104,9 @@ export default function UnifiedDashboard() {
   };
 
   const toggleAvailability = (day: string, hour: number) => {
-    if (!selectedPerson) return;
+    if (!editedPerson) return;
 
-    const updatedAvailability = { ...selectedPerson.availability };
+    const updatedAvailability = { ...editedPerson.availability };
     const dayAvailability = updatedAvailability[day] || [];
 
     if (dayAvailability.includes(hour)) {
@@ -140,7 +117,7 @@ export default function UnifiedDashboard() {
       );
     }
 
-    updatePerson({ ...selectedPerson, availability: updatedAvailability });
+    setEditedPerson({ ...editedPerson, availability: updatedAvailability });
   };
 
   const togglePersonVisibility = (personId: string) => {
@@ -156,7 +133,7 @@ export default function UnifiedDashboard() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="mb-4 text-2xl font-bold">
-        Unified Availability Dashboard
+        ChronoPlan - Schedules made easy
       </h1>
 
       <Tabs defaultValue="individual">
@@ -166,26 +143,48 @@ export default function UnifiedDashboard() {
         </TabsList>
 
         <TabsContent value="individual">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+          <StaffList />
+          <div className="mb-4 flex justify-between">
+            <Select
+              value={selectedPersonId || ""}
+              onValueChange={setSelectedPersonId}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select a person" />
+              </SelectTrigger>
+              <SelectContent>
+                {people.map((person) => (
+                  <SelectItem key={person.id} value={person.id}>
+                    {person.name} ({person.role})
+                  </SelectItem>
+                ))}
+                <SelectItem value="new">Add New Person</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={savePerson} disabled={!editedPerson}>
+              Save Changes
+            </Button>
+          </div>
+
+          {editedPerson && (
             <Card>
               <CardHeader>
-                <CardTitle>Add New Person</CardTitle>
+                <CardTitle>
+                  {editedPerson.id === "new" ? "Add New Person" : "Edit Person"}
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    addPerson();
-                  }}
-                  className="space-y-4"
-                >
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Name</Label>
                     <Input
                       id="name"
-                      value={newPerson.name}
+                      value={editedPerson.name}
                       onChange={(e) =>
-                        setNewPerson({ ...newPerson, name: e.target.value })
+                        setEditedPerson({
+                          ...editedPerson,
+                          name: e.target.value,
+                        })
                       }
                       required
                     />
@@ -193,18 +192,18 @@ export default function UnifiedDashboard() {
                   <div className="space-y-2">
                     <Label>Role</Label>
                     <RadioGroup
-                      value={newPerson.role}
+                      value={editedPerson.role}
                       onValueChange={(value: "staff" | "client") =>
-                        setNewPerson({ ...newPerson, role: value })
+                        setEditedPerson({ ...editedPerson, role: value })
                       }
                     >
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="client" id="new-client" />
-                        <Label htmlFor="new-client">Client</Label>
+                        <RadioGroupItem value="client" id="edit-client" />
+                        <Label htmlFor="edit-client">Client</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="staff" id="new-staff" />
-                        <Label htmlFor="new-staff">Staff</Label>
+                        <RadioGroupItem value="staff" id="edit-staff" />
+                        <Label htmlFor="edit-staff">Staff</Label>
                       </div>
                     </RadioGroup>
                   </div>
@@ -212,10 +211,10 @@ export default function UnifiedDashboard() {
                     <Label htmlFor="services">Services (comma-separated)</Label>
                     <Input
                       id="services"
-                      value={newPerson.services.join(", ")}
+                      value={editedPerson.services.join(", ")}
                       onChange={(e) =>
-                        setNewPerson({
-                          ...newPerson,
+                        setEditedPerson({
+                          ...editedPerson,
                           services: e.target.value
                             .split(",")
                             .map((s) => s.trim()),
@@ -224,43 +223,8 @@ export default function UnifiedDashboard() {
                       required
                     />
                   </div>
-                  <Button type="submit">Add Person</Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Edit Person</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Select
-                  value={selectedPersonId || ""}
-                  onValueChange={setSelectedPersonId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {people.map((person) => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.name} ({person.role})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {selectedPerson && (
-                  <div className="mt-4">
-                    <h3 className="mb-2 text-lg font-semibold">
-                      {selectedPerson.name}'s Details
-                    </h3>
-                    <p>Role: {selectedPerson.role}</p>
-                    <p>Services: {selectedPerson.services.join(", ")}</p>
-
-                    <h3 className="mb-2 mt-4 text-lg font-semibold">
-                      Availability
-                    </h3>
+                  <div className="space-y-2">
+                    <Label>Availability</Label>
                     <div
                       className="overflow-x-auto"
                       onMouseLeave={handleMouseUp}
@@ -286,7 +250,7 @@ export default function UnifiedDashboard() {
                                   key={`${day}-${hour}`}
                                   className={`cursor-pointer border px-4 py-2 ${
                                     (
-                                      selectedPerson.availability[day] || []
+                                      editedPerson.availability[day] || []
                                     ).includes(hour)
                                       ? "bg-primary"
                                       : "bg-background"
@@ -297,7 +261,7 @@ export default function UnifiedDashboard() {
                                   }
                                   role="gridcell"
                                   aria-selected={(
-                                    selectedPerson.availability[day] || []
+                                    editedPerson.availability[day] || []
                                   ).includes(hour)}
                                   tabIndex={0}
                                   onKeyDown={(e) => {
@@ -313,10 +277,10 @@ export default function UnifiedDashboard() {
                       </table>
                     </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
-          </div>
+          )}
         </TabsContent>
 
         <TabsContent value="global">

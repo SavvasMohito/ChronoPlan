@@ -4,13 +4,10 @@ import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { clients } from "@/server/db/schema";
 
 export const clientsRouter = createTRPCRouter({
-  hello: publicProcedure
-    .input(z.object({ text: z.string() }))
-    .query(({ input }) => {
-      return {
-        greeting: `Hello ${input.text}`,
-      };
-    }),
+  getAll: publicProcedure.query(async ({ ctx }) => {
+    const clients = await ctx.db.query.clients.findMany();
+    return clients;
+  }),
 
   create: publicProcedure
     .input(
@@ -20,10 +17,16 @@ export const clientsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.insert(clients).values({
-        name: input.name,
-        services: input.services,
-      });
+      await ctx.db
+        .insert(clients)
+        .values({
+          name: input.name,
+          services: input.services,
+        })
+        .onConflictDoUpdate({
+          target: clients.id,
+          set: { name: input.name, services: input.services },
+        });
     }),
 
   // getLatest: publicProcedure.query(async ({ ctx }) => {
